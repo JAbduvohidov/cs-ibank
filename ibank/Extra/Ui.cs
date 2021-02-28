@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace ibank.Extra
 {
@@ -43,6 +44,75 @@ namespace ibank.Extra
             } while (key != ConsoleKey.Enter);
 
             return characters;
+        }
+
+        public static int ComboBox(List<string> items, int selectedIndex = 0,
+            ConsoleColor selectedBackgroundColor = ConsoleColor.White,
+            ConsoleColor selectedForegroundColor = ConsoleColor.Black,
+            ConsoleColor color = ConsoleColor.White)
+        {
+            Console.CursorVisible = false;
+            var currentForegroundColor = Console.ForegroundColor;
+            var currentBackgroundColor = Console.BackgroundColor;
+            Console.ForegroundColor = color;
+            var (left, top) = Console.GetCursorPosition();
+
+            while (true)
+            {
+                for (var i = 0; i < items.Count; i++)
+                {
+                    Console.SetCursorPosition(left, top + i);
+                    if (i == selectedIndex)
+                    {
+                        Console.ForegroundColor = selectedForegroundColor;
+                        Console.BackgroundColor = selectedBackgroundColor;
+                        Console.Write($" ➩  {i + 1}. {items[i]}");
+                        Console.ForegroundColor = currentForegroundColor;
+                        Console.BackgroundColor = currentBackgroundColor;
+                        Console.Write("\n");
+                        continue;
+                    }
+
+                    Console.WriteLine($"    {i + 1}. {items[i]}");
+                }
+
+                Console.ForegroundColor = currentForegroundColor;
+
+
+                var key = Console.ReadKey();
+
+                switch (key.Key)
+                {
+                    case ConsoleKey.UpArrow:
+                    {
+                        if (selectedIndex == 0)
+                        {
+                            selectedIndex = items.Count - 1;
+                            break;
+                        }
+
+                        selectedIndex--;
+                        break;
+                    }
+                    case ConsoleKey.DownArrow:
+                    {
+                        if (selectedIndex == items.Count - 1)
+                        {
+                            selectedIndex = 0;
+                            break;
+                        }
+
+                        selectedIndex++;
+
+                        break;
+                    }
+                    case ConsoleKey.Enter:
+                    {
+                        Console.CursorVisible = true;
+                        return selectedIndex;
+                    }
+                }
+            }
         }
     }
 }

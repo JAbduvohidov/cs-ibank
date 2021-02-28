@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using ibank.Extra;
 using Npgsql;
@@ -41,38 +42,60 @@ namespace ibank
                 }
                 case User.Roles.Admin:
                 {
-                    //TODO: admin zone here
-                    //TODO: place it in while loop
-                    Console.WriteLine("admin zone");
-                    // while (isRunning) adminFunctionsLoop();
-
-                    // switch (Console.ReadLine())
-                    // {
-                    //     case "1":
-                    //     {
-                    //         break;
-                    //     }
-                    //     case "2":
-                    //     {
-                    //         break;
-                    //     }
-                    //     case "3":
-                    //     {
-                    //         break;
-                    //     }
-                    //     case "4":
-                    //     {
-                    //         break;
-                    //     }
-                    //     default:
-                    //         break;
-                    // }
+                    AdminFunctionsLoop();
                     break;
                 }
                 default:
                 {
                     Console.WriteLine("you don't have any permissions :(");
                     break;
+                }
+            }
+        }
+
+        private static void AdminFunctionsLoop()
+        {
+            var items = new List<string>
+            {
+                "Register new user ",
+                "List users        ",
+                "Find user         ",
+                "Edit user         ",
+                "Exit              "
+            };
+
+            while (isRunning)
+            {
+                Shred();
+                Console.SetCursorPosition(2, 2);
+                var selectedIndex = Ui.ComboBox(items);
+                switch (selectedIndex)
+                {
+                    case 0:
+                    {
+                        Console.WriteLine(items[selectedIndex]);
+                        break;
+                    }
+                    case 1:
+                    {
+                        Console.WriteLine(items[selectedIndex]);
+                        break;
+                    }
+                    case 2:
+                    {
+                        Console.WriteLine(items[selectedIndex]);
+                        break;
+                    }
+                    case 3:
+                    {
+                        Console.WriteLine(items[selectedIndex]);
+                        break;
+                    }
+                    case 4:
+                    {
+                        isRunning = false;
+                        break;
+                    }
                 }
             }
         }
@@ -136,10 +159,7 @@ namespace ibank
             return response;
         }
 
-        private static void Shred()
-        {
-            Console.Clear();
-        }
+        private static void Shred() => Console.Clear();
     }
 
     class LoginResponseModel
