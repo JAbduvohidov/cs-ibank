@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using Npgsql;
 
@@ -19,12 +18,15 @@ namespace ibank.Extra
 (
     id         bigserial primary key,
     login      varchar(255) not null unique,
+    firstname  varchar(255) not null,
+    lastname   varchar(255) not null,
+    middlename varchar(255) default '',
     password   varchar(255) not null,
-    role       varchar(20) default 'User',
+    role       varchar(20)  default 'User',
     passport   varchar(20)  not null,
-    created_at timestamp   default now(),
+    created_at timestamp    default now(),
 --     updated_at timestamp   default now(),
-    removed    boolean     default false
+    removed    boolean      default false
 );", connection);
             await tableUsers.ExecuteNonQueryAsync();
 
@@ -67,12 +69,19 @@ namespace ibank.Extra
 );", connection);
             await tableRepayments.ExecuteNonQueryAsync();
 
-            var passwordHash = BCrypt.Net.BCrypt.HashPassword("password");
-
             //TODO: get first user data from environment variables or application arguments
 
-            await using var insertFirstAdmin = new NpgsqlCommand(@"insert into users (login, password, role, passport)
-values ('moderator', @password, @role, 'A00000001') on conflict do nothing;", connection);
+            await using var checkIfModeratorExists =
+                new NpgsqlCommand("select exists(select 1 from users where login = 'moderator');", connection);
+
+            var exists = await checkIfModeratorExists.ExecuteScalarAsync();
+            if (exists != null && (bool) exists)
+                return;
+
+            var passwordHash = BCrypt.Net.BCrypt.HashPassword("password");
+            await using var insertFirstAdmin = new NpgsqlCommand(
+                @"insert into users (login, firstname, lastname, password, role, passport)
+values ('moderator', 'Moderator', 'Moderator', @password, @role, 'A00000001') on conflict do nothing;", connection);
             insertFirstAdmin.Parameters.AddWithValue("password", passwordHash);
             insertFirstAdmin.Parameters.AddWithValue("role", User.Roles.Admin.ToString());
             await insertFirstAdmin.ExecuteNonQueryAsync();

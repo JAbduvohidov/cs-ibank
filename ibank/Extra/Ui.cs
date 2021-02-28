@@ -14,7 +14,7 @@ namespace ibank.Extra
             Console.SetCursorPosition(x + 3, y + 2);
         }
 
-        public static string InputText(string header, int width, int height, int x, int y)
+        public static string InputText(string header, int width = 20, int height = 3, int x = 0, int y = 0)
         {
             Draw(header, width, height, x, y);
             return Console.ReadLine();

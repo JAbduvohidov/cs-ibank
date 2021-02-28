@@ -9,7 +9,7 @@ using static System.Enum;
 
 namespace ibank
 {
-    internal class Program
+    internal static class Program
     {
         private static bool isRunning = true;
 
@@ -42,7 +42,7 @@ namespace ibank
                 }
                 case User.Roles.Admin:
                 {
-                    AdminFunctionsLoop();
+                    await AdminFunctionsLoop();
                     break;
                 }
                 default:
@@ -53,15 +53,16 @@ namespace ibank
             }
         }
 
-        private static void AdminFunctionsLoop()
+        private static async Task AdminFunctionsLoop()
         {
             var items = new List<string>
             {
-                "Register new user ",
-                "List users        ",
-                "Find user         ",
-                "Edit user         ",
-                "Exit              "
+                "Register new user ", // 0
+                "Fill user profile ", // 1
+                "List users        ", // 2
+                "Find user         ", // 3
+                "Edit user         ", // 4
+                "Exit              ", // 5
             };
 
             while (isRunning)
@@ -73,31 +74,102 @@ namespace ibank
                 {
                     case 0:
                     {
-                        Console.WriteLine(items[selectedIndex]);
+                        Shred();
+                        var infoText = await RegisterNewUser();
+                        if (infoText != string.Empty)
+                        {
+                            Console.WriteLine(infoText);
+                            Thread.Sleep(1200);
+                        }
+
                         break;
                     }
-                    case 1:
-                    {
-                        Console.WriteLine(items[selectedIndex]);
-                        break;
-                    }
-                    case 2:
-                    {
-                        Console.WriteLine(items[selectedIndex]);
-                        break;
-                    }
-                    case 3:
-                    {
-                        Console.WriteLine(items[selectedIndex]);
-                        break;
-                    }
-                    case 4:
+                    case 5:
                     {
                         isRunning = false;
                         break;
                     }
                 }
             }
+        }
+
+        private static async Task<string> RegisterNewUser()
+        {
+            var roles = new List<string> {"User  ", "Admin "};
+
+            var user = new User();
+
+            user.Login = Ui.InputText("*Phone number(ex: 992900111222)", 30, 3, 3, 1);
+            Shred();
+
+            if (user.Login.Length < 10 && !int.TryParse(user.Login, out _))
+                return "invalid phone number";
+
+            user.FirstName = Ui.InputText("*Name", 20, 3, 3, 1);
+            Shred();
+
+            if (user.FirstName.Length < 1)
+                return "invalid first name";
+
+            user.LastName = Ui.InputText("*Surname", 20, 3, 3, 1);
+            Shred();
+
+            if (user.LastName.Length < 1)
+                return "invalid last name";
+
+            user.MiddleName = Ui.InputText("MiddleName", 20, 3, 3, 1);
+            Shred();
+
+            Console.SetCursorPosition(3, 1);
+            user.Role = (User.Roles) (Ui.ComboBox(roles) + 1);
+            Shred();
+
+
+            user.Passport = Ui.InputText("*Passport data", 20, 3, 3, 1);
+            Shred();
+
+            if (user.Passport.Length < 8)
+                return "invalid passport data";
+
+            user.Password = Ui.InputText("*Create password", 30, 3, 3, 1, "*");
+            Shred();
+
+            if (user.Password.Length < 8)
+                return "password is too short";
+
+            user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
+
+            await using var connection = Database.GetConnection();
+            await connection.OpenAsync();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"insert into users (login, firstname, lastname, middlename, password, role, passport)
+                    values (@login, @firstname, @lastname, @middlename, @password, @role, @passport);", connection);
+                cmd.Parameters.AddWithValue("login", user.Login);
+                cmd.Parameters.AddWithValue("firstname", user.FirstName);
+                cmd.Parameters.AddWithValue("lastname", user.LastName);
+                cmd.Parameters.AddWithValue("middlename", user.MiddleName);
+                cmd.Parameters.AddWithValue("password", user.Password);
+                cmd.Parameters.AddWithValue("role", user.Role.ToString());
+                cmd.Parameters.AddWithValue("passport", user.Passport);
+
+                if (await cmd.ExecuteNonQueryAsync() < 1)
+                {
+                    return "unable to add new user";
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            return string.Empty;
         }
 
         private static async Task<LoginResponseModel> Login(string login, string password)
@@ -184,6 +256,9 @@ namespace ibank
 
         public int Id { get; set; }
         public string Login { get; set; }
+        public string FirstName { get; set; }
+        public string LastName { get; set; }
+        public string MiddleName { get; set; }
         public string Password { get; set; }
         public Roles Role { get; set; }
         public string Passport { get; set; }
