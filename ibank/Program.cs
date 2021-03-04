@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using ibank.Extra;
+using Microsoft.VisualBasic;
 using Npgsql;
 using NpgsqlTypes;
 using static System.Enum;
@@ -11,7 +12,7 @@ namespace ibank
 {
     internal static class Program
     {
-        private static bool isRunning = true;
+        private static bool _isRunning = true;
 
         private static async Task Main(string[] args)
         {
@@ -59,13 +60,12 @@ namespace ibank
             {
                 "Register new user ", // 0
                 "Fill user profile ", // 1
-                "List users        ", // 2
-                "Find user         ", // 3
-                "Edit user         ", // 4
-                "Exit              ", // 5
+                "Filter            ", // 2
+                "Edit user         ", // 3
+                "Exit              ", // 4
             };
 
-            while (isRunning)
+            while (_isRunning)
             {
                 Shred();
                 Console.SetCursorPosition(2, 2);
@@ -84,13 +84,158 @@ namespace ibank
 
                         break;
                     }
-                    case 5:
+                    case 1:
                     {
-                        isRunning = false;
+                        Shred();
+                        var infoText = await FillUserProfile();
+                        if (infoText != string.Empty)
+                        {
+                            Shred();
+                            Console.WriteLine(infoText);
+                            Thread.Sleep(1200);
+                        }
+
+                        break;
+                    }
+                    case 4:
+                    {
+                        Shred();
+                        _isRunning = false;
                         break;
                     }
                 }
             }
+        }
+
+        private static async Task<string> FillUserProfile()
+        {
+            var login = Ui.InputText("Search", 20, 3, 3, 1);
+            Shred();
+
+            await using var connection = Database.GetConnection();
+            await connection.OpenAsync();
+            var users = new List<User>();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"select u.id, u.login, u.firstname, u.lastname, u.middlename, u.role, u.passport
+from users u
+         left join profiles p on u.id = p.user_id
+where p.id is null
+  and u.removed = false
+  and u.login like @login
+order by u.id;", connection);
+                cmd.Parameters.AddWithValue("login", $"%{login}%");
+
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var user = new User
+                    {
+                        Id = reader.GetInt32(0),
+                        Login = reader.GetString(1),
+                        FirstName = reader.GetString(2),
+                        LastName = reader.GetString(3),
+                        MiddleName = reader.GetString(4),
+                        Passport = reader.GetString(6)
+                    };
+                    _ = TryParse(reader.GetString(3), out User.Roles role);
+                    user.Role = role;
+
+                    users.Add(user);
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            var usersString = new List<string>();
+            users.ForEach(user => usersString.Add($"{user} "));
+            usersString.Add("Go back ");
+
+            Console.SetCursorPosition(2, 2);
+            var index = Ui.ComboBox(usersString);
+            if (index == usersString.Count - 1)
+                return string.Empty;
+
+            var genders = new List<string> {"Male   ", "Female "};
+
+            var profile = new Profile();
+
+            Shred();
+            Console.SetCursorPosition(4, 1);
+            Console.Write("Gender:");
+            Console.SetCursorPosition(3, 2);
+            profile.Gender = (Profile.Genders) (Ui.ComboBox(genders) + 1);
+
+            Shred();
+            _ = int.TryParse(Ui.InputText("Age:", 20, 3, 3, 1), out var age);
+            if (age < 18)
+                return "invalid value for field age";
+
+            profile.Age = age;
+
+            var maritalStatuses = new List<string> {"Single       ", "Married      ", "Divorced     ", "WidowWidower "};
+            Shred();
+            Console.SetCursorPosition(4, 1);
+            Console.Write("Marital status:");
+            Console.SetCursorPosition(3, 2);
+            profile.MaritalStatus = (Profile.MaritalStatuses) (Ui.ComboBox(maritalStatuses) + 1);
+
+            Shred();
+
+            Console.SetCursorPosition(4, 1);
+            Console.Write("Nationality:");
+            Console.SetCursorPosition(3, 2);
+            var nationalities = new List<string> {"Tajikistan ", "Other      "};
+
+            var nationalitiesIndex = Ui.ComboBox(nationalities);
+            if (nationalitiesIndex == nationalities.Count - 1)
+            {
+                Shred();
+                profile.Nationality = Ui.InputText("Nationality:", 30, 3, 3, 2);
+                if (profile.Nationality.Length < 2)
+                    return "nationality is too short";
+            }
+            else
+            {
+                profile.Nationality = Strings.Trim(nationalities[nationalitiesIndex]);
+            }
+
+            await connection.OpenAsync();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"insert into profiles(user_id, gender, marital_status, age, nationality)
+values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
+                cmd.Parameters.AddWithValue("user_id", NpgsqlDbType.Bigint, users[index].Id);
+                cmd.Parameters.AddWithValue("gender", profile.Gender.ToString());
+                cmd.Parameters.AddWithValue("marital_status", profile.MaritalStatus.ToString());
+                cmd.Parameters.AddWithValue("age", NpgsqlDbType.Integer, profile.Age);
+                cmd.Parameters.AddWithValue("nationality", profile.Nationality);
+
+                if (await cmd.ExecuteNonQueryAsync() < 1)
+                {
+                    return "unable to fill user profile";
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            return string.Empty;
         }
 
         private static async Task<string> RegisterNewUser()
@@ -183,10 +328,12 @@ namespace ibank
                 try
                 {
                     await using var cmd =
-                        new NpgsqlCommand("select id, login, password, role from users where login = @login;",
+                        new NpgsqlCommand(
+                            "select id, login, password, role from users where login = @login and removed = false;",
                             connection);
                     cmd.Parameters.AddWithValue("login", NpgsqlDbType.Varchar, login);
 
+                    //TODO: simplify this reader
                     await using var reader = await cmd.ExecuteReaderAsync();
 
                     while (await reader.ReadAsync())
@@ -234,7 +381,7 @@ namespace ibank
         private static void Shred() => Console.Clear();
     }
 
-    class LoginResponseModel
+    internal record LoginResponseModel
     {
         public string Error { get; set; }
         public User User { get; set; }
@@ -246,7 +393,7 @@ namespace ibank
         }
     }
 
-    class User
+    internal record User
     {
         public enum Roles
         {
@@ -264,9 +411,14 @@ namespace ibank
         public string Passport { get; set; }
         public DateTime CreatedAt { get; set; }
         public Profile Profile { get; set; }
+
+        public override string ToString()
+        {
+            return $"{Login} {FirstName} {LastName}";
+        }
     }
 
-    class Profile
+    internal record Profile
     {
         public enum Genders
         {
@@ -287,10 +439,10 @@ namespace ibank
         public MaritalStatuses MaritalStatus { get; set; }
         public int Age { get; set; }
         public string Nationality { get; set; }
-        public List<Credit>? Credits { get; set; }
+        public List<Credit> Credits { get; set; }
     }
 
-    class Credit
+    internal record Credit
     {
         public enum Terms
         {

@@ -111,6 +111,11 @@ namespace ibank.Extra
                         Console.CursorVisible = true;
                         return selectedIndex;
                     }
+                    default:
+                    {
+                        Console.Write("\b \b");
+                        break;
+                    }
                 }
             }
         }

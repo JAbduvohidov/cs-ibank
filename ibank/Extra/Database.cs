@@ -37,8 +37,7 @@ namespace ibank.Extra
     gender         varchar(20) not null,
     marital_status varchar(50) not null,
     age            integer     not null check ( age > 0 ),
-    nationality    varchar(100) default 'Таджикистан',
-    removed        boolean      default false
+    nationality    varchar(100) default 'Tajikistan'
 );", connection);
             await tableProfiles.ExecuteNonQueryAsync();
 
@@ -72,7 +71,8 @@ namespace ibank.Extra
             //TODO: get first user data from environment variables or application arguments
 
             await using var checkIfModeratorExists =
-                new NpgsqlCommand("select exists(select 1 from users where login = 'moderator');", connection);
+                new NpgsqlCommand("select exists(select 1 from users where login = 'moderator' and removed = false);",
+                    connection);
 
             var exists = await checkIfModeratorExists.ExecuteScalarAsync();
             if (exists != null && (bool) exists)
