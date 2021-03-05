@@ -59,9 +59,9 @@ namespace ibank.Extra
             await using var tableRepayments = new NpgsqlCommand(@"create table if not exists repayments
 (
     id        bigserial primary key,
-    credit_id bigint    not null references credits,
-    date      timestamp not null,
-    amount    integer   not null,
+    credit_id bigint         not null references credits,
+    date      timestamp      not null,
+    amount    numeric(10, 2) not null,
     repaid    boolean default false,
     removed   boolean default false
 );", connection);

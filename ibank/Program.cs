@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using ibank.Extra;
@@ -38,9 +39,7 @@ namespace ibank
             {
                 case User.Roles.User:
                 {
-                    //TODO: user zone here
-                    Console.WriteLine("user zone");
-                    //while (isRunning) userFunctionsLoop();
+                    await UserFunctionsLoop(login);
                     break;
                 }
                 case User.Roles.Admin:
@@ -56,6 +55,212 @@ namespace ibank
             }
         }
 
+        private static async Task UserFunctionsLoop(string phoneNumber)
+        {
+            var items = new List<string>
+            {
+                "Application history ", // 0
+                "Remaining loans     ", // 1
+                "Exit                ", // 2
+            };
+
+            while (_isRunning)
+            {
+                Title($"PA - {phoneNumber}");
+                Shred();
+                Console.SetCursorPosition(2, 2);
+                switch (Ui.ComboBox(items))
+                {
+                    case 0:
+                    {
+                        Shred();
+                        var infoText = await ApplicationHistory(phoneNumber);
+                        if (infoText != string.Empty)
+                        {
+                            Console.WriteLine(infoText);
+                            Thread.Sleep(1200);
+                        }
+
+                        break;
+                    }
+                    case 1:
+                    {
+                        Shred();
+                        var infoText = await RemainingLoans(phoneNumber);
+                        if (infoText != string.Empty)
+                        {
+                            Console.WriteLine(infoText);
+                            Thread.Sleep(1200);
+                        }
+
+                        break;
+                    }
+                    case 2:
+                    {
+                        Shred();
+                        _isRunning = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private static async Task<string> RemainingLoans(string phoneNumber)
+        {
+            await using var connection = Database.GetConnection();
+            var credits = new List<Credit>();
+            await connection.OpenAsync();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"select c.id, c.purpose, c.term, c.accepted, coalesce(sum(r.amount), 0)
+from credits c
+         left join users u on c.user_id = u.id
+         left join repayments r on c.id = r.credit_id
+where c.removed = false and c.accepted = true
+  and u.login = @login
+group by c.id;", connection);
+                cmd.Parameters.AddWithValue("login", phoneNumber);
+
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var credit = new Credit
+                    {
+                        Id = reader.GetInt32(0),
+                        Term = reader.GetInt32(2),
+                        Accepted = reader.GetBoolean(3),
+                        LoanAmount = reader.GetDouble(4)
+                    };
+                    _ = TryParse(reader.GetString(1), out Credit.Purposes purpose);
+                    credit.Purpose = purpose;
+
+                    credits.Add(credit);
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            var creditsList = new List<string>();
+
+            credits.ForEach(credit => creditsList.Add($"{credit} "));
+            creditsList.Add("Golang is back ");
+
+            var selectedIndex = 0;
+            while (true)
+            {
+                Shred();
+                Console.SetCursorPosition(2, 2);
+                selectedIndex = Ui.ComboBox(creditsList, selectedIndex);
+                if (selectedIndex == creditsList.Count - 1) break;
+
+
+                var repayments = new List<Repayment>();
+                await connection.OpenAsync();
+                try
+                {
+                    await using var cmd = new NpgsqlCommand(
+                        @"select r.id, r.amount, r.repaid, r.date
+from repayments r
+         left join credits c on c.id = r.credit_id
+where r.removed = false and r.repaid = false and r.credit_id = @credit_id;", connection);
+                    cmd.Parameters.AddWithValue("credit_id", credits[selectedIndex].Id);
+
+                    var reader = await cmd.ExecuteReaderAsync();
+                    while (await reader.ReadAsync())
+                    {
+                        var repayment = new Repayment
+                        {
+                            Id = reader.GetInt32(0),
+                            Amount = reader.GetDouble(1),
+                            Repaid = reader.GetBoolean(2),
+                            RepaymentDate = reader.GetDateTime(3)
+                        };
+
+                        repayments.Add(repayment);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Console.WriteLine(exception);
+                    throw;
+                }
+                finally
+                {
+                    await connection.CloseAsync();
+                }
+
+                var repaymentsList = new List<string>();
+                repayments.ForEach(repayment => repaymentsList.Add($"{repayment} "));
+                repaymentsList.Add("Back");
+
+                Shred();
+                Console.SetCursorPosition(2, 2);
+                Ui.ComboBox(repaymentsList);
+            }
+
+
+            return string.Empty;
+        }
+
+        private static async Task<string> ApplicationHistory(string phoneNumber)
+        {
+            await using var connection = Database.GetConnection();
+            var credits = new List<Credit>();
+            await connection.OpenAsync();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"select loan_amount, purpose, term, accepted
+from credits
+         left join users u on credits.user_id = u.id
+where u.login = @login;", connection);
+                cmd.Parameters.AddWithValue("login", phoneNumber);
+
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var credit = new Credit
+                    {
+                        LoanAmount = reader.GetDouble(0),
+                        Term = reader.GetInt32(2),
+                        Accepted = reader.GetBoolean(3),
+                    };
+                    _ = TryParse(reader.GetString(1), out Credit.Purposes purpose);
+                    credit.Purpose = purpose;
+
+                    credits.Add(credit);
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            var creditsList = new List<string>();
+
+            credits.ForEach(credit => creditsList.Add($"{credit} "));
+            creditsList.Add("Golang is back ");
+
+            Shred();
+            Console.SetCursorPosition(2, 2);
+            Ui.ComboBox(creditsList);
+
+            return string.Empty;
+        }
+
         private static async Task AdminFunctionsLoop()
         {
             var items = new List<string>
@@ -63,7 +268,7 @@ namespace ibank
                 "Register new user ", // 0
                 "Fill user profile ", // 1
                 "Apply for a loan  ", // 2
-                "Filter            ", // 3
+                "Users             ", // 3
                 "Edit user         ", // 4
                 "Exit              ", // 5
             };
@@ -73,8 +278,7 @@ namespace ibank
                 Title("ADMIN");
                 Shred();
                 Console.SetCursorPosition(2, 2);
-                var selectedIndex = Ui.ComboBox(items);
-                switch (selectedIndex)
+                switch (Ui.ComboBox(items))
                 {
                     case 0:
                     {
@@ -232,6 +436,18 @@ order by u.id;", connection);
 
             Shred();
 
+            var purposes = new List<string>
+            {
+                "Appliances ",
+                "Repair     ",
+                "Telephone  ",
+                "Other      ",
+            };
+
+            Console.SetCursorPosition(4, 1);
+            Console.Write("Marital status:");
+            Console.SetCursorPosition(3, 2);
+            credit.Purpose = (Credit.Purposes) (Ui.ComboBox(purposes) + 1);
             credit.TotalIncome = totalIncome;
             credit.History = numberOfClosedCredits;
             credit.Delinquencies = numberOfDelayedCredits;
@@ -333,6 +549,13 @@ values (@user_id, @loan_amount, @total_income, @history, @delinquencies, @purpos
             }
 
             if (credit.Id == 0) return "unable to add new credit";
+
+            if (!credit.Accepted)
+            {
+                await transaction.CommitAsync();
+                await connection.CloseAsync();
+                return "We are sorry but your application was not accepted";
+            }
 
             var repayments = new List<Repayment>();
             var amount = credit.LoanAmount / credit.Term;
@@ -749,6 +972,9 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
         public int Term { get; set; }
         public bool Accepted { get; set; }
         public List<Repayment> Repayments { get; set; }
+
+        public override string ToString() =>
+            $"Amount: {LoanAmount}, Purpose: {Purpose}, Term: {Term}MM, Status:{(Accepted ? "✅" : "❌")}";
     }
 
     internal record Repayment
@@ -759,6 +985,6 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
         public bool Repaid { get; set; }
 
         public override string ToString() =>
-            $@"Date: {RepaymentDate}, Amount: {Amount}, Repaid: {(Repaid ? "✅" : "❌")}";
+            $"Date: {RepaymentDate}, Amount: {Amount}, Repaid: {(Repaid ? "✅" : "❌")}";
     }
 }
