@@ -14,10 +14,12 @@ namespace ibank
     {
         private static bool _isRunning = true;
 
-        private static async Task Main(string[] args)
+        private static async Task Main()
         {
             Shred();
             await Database.Init();
+
+            Title("Login");
 
             var login = Ui.InputText("Phone/Login", 20, 3, 3, 1);
             Shred();
@@ -60,13 +62,15 @@ namespace ibank
             {
                 "Register new user ", // 0
                 "Fill user profile ", // 1
-                "Filter            ", // 2
-                "Edit user         ", // 3
-                "Exit              ", // 4
+                "Apply for a loan  ", // 2
+                "Filter            ", // 3
+                "Edit user         ", // 4
+                "Exit              ", // 5
             };
 
             while (_isRunning)
             {
+                Title("ADMIN");
                 Shred();
                 Console.SetCursorPosition(2, 2);
                 var selectedIndex = Ui.ComboBox(items);
@@ -97,7 +101,20 @@ namespace ibank
 
                         break;
                     }
-                    case 4:
+                    case 2:
+                    {
+                        Shred();
+                        var infoText = await ApplyForLoan();
+                        if (infoText != string.Empty)
+                        {
+                            Shred();
+                            Console.WriteLine(infoText);
+                            Thread.Sleep(1200);
+                        }
+
+                        break;
+                    }
+                    case 5:
                     {
                         Shred();
                         _isRunning = false;
@@ -107,8 +124,10 @@ namespace ibank
             }
         }
 
-        private static async Task<string> FillUserProfile()
+        private static async Task<string> ApplyForLoan()
         {
+            Title("Apply for loan");
+
             var login = Ui.InputText("Search", 20, 3, 3, 1);
             Shred();
 
@@ -118,7 +137,277 @@ namespace ibank
             try
             {
                 await using var cmd = new NpgsqlCommand(
-                    @"select u.id, u.login, u.firstname, u.lastname, u.middlename, u.role, u.passport
+                    @"select u.id,
+       u.login,
+       u.firstname,
+       u.lastname,
+       u.middlename,
+       u.passport,
+       p.gender,
+       p.marital_status,
+       p.age,
+       p.nationality
+from users u
+         left join profiles p on u.id = p.user_id
+where p.id is not null
+  and (select count(id) from credits where user_id = u.id and accepted = false) < 5
+  and u.removed = false
+  and u.login like @login
+order by u.id;", connection);
+                cmd.Parameters.AddWithValue("login", $"%{login}%");
+
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var user = new User
+                    {
+                        Id = reader.GetInt32(0),
+                        Login = reader.GetString(1),
+                        FirstName = reader.GetString(2),
+                        LastName = reader.GetString(3),
+                        MiddleName = reader.GetString(4),
+                        Passport = reader.GetString(5),
+                        Profile = new Profile(),
+                    };
+
+                    _ = TryParse(reader.GetString(6), out Profile.Genders gender);
+                    user.Profile.Gender = gender;
+
+                    _ = TryParse(reader.GetString(7), out Profile.MaritalStatuses maritalStatus);
+                    user.Profile.MaritalStatus = maritalStatus;
+
+                    user.Profile.Age = reader.GetInt32(8);
+                    user.Profile.Nationality = reader.GetString(9);
+
+                    users.Add(user);
+                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
+            }
+
+            var usersString = new List<string>();
+            users.ForEach(user => usersString.Add($"{user} "));
+            usersString.Add("Go back ");
+
+            Shred();
+
+            Console.SetCursorPosition(2, 2);
+            var index = Ui.ComboBox(usersString);
+            if (index == usersString.Count - 1)
+                return string.Empty;
+
+            var credit = new Credit();
+
+            Shred();
+
+            if (!double.TryParse(Ui.InputText("Total income:", 20, 3, 3, 1), out var totalIncome))
+                return "invalid income value";
+
+            Shred();
+
+            if (!int.TryParse(Ui.InputText("Number of closed credits:", 20, 3, 3, 1), out var numberOfClosedCredits))
+                return "invalid value for number of closed credits";
+
+            Shred();
+
+            if (!int.TryParse(Ui.InputText("Number of delayed credits:", 20, 3, 3, 1), out var numberOfDelayedCredits))
+                return "invalid value for number of delayed credits";
+
+            Shred();
+
+            if (!int.TryParse(Ui.InputText("Loan terms:", 20, 3, 3, 1), out var loanTerms))
+                return "invalid value for number of delayed credits";
+
+            Shred();
+
+            if (!int.TryParse(Ui.InputText("Loan amount:", 20, 3, 3, 1), out var loanAmount))
+                return "invalid value for number of delayed credits";
+
+            Shred();
+
+            credit.TotalIncome = totalIncome;
+            credit.History = numberOfClosedCredits;
+            credit.Delinquencies = numberOfDelayedCredits;
+            credit.Term = loanTerms;
+            credit.LoanAmount = loanAmount;
+
+            var points = 0;
+            points += users[index].Profile.Gender switch
+            {
+                Profile.Genders.Male => 1,
+                Profile.Genders.Female => 2,
+                _ => 0
+            };
+
+
+            points += users[index].Profile.MaritalStatus switch
+            {
+                Profile.MaritalStatuses.Single or Profile.MaritalStatuses.Divorced => 1,
+                Profile.MaritalStatuses.Married or Profile.MaritalStatuses.WidowWidower => 2,
+                _ => 0
+            };
+
+            points += users[index].Profile.Age switch
+            {
+                (>= 26 and <= 35) or (>=63) => 1,
+                >= 36 and <= 62 => 2,
+                _ => 0
+            };
+
+            points += users[index].Profile.Nationality == "Tajikistan" ? 1 : 0;
+
+            points += credit.History switch
+            {
+                >= 3 => 2,
+                1 or 2 => 1,
+                0 => -1,
+                _ => 0
+            };
+
+            points += credit.Delinquencies switch
+            {
+                > 7 => -3,
+                >= 5 and <=7 => -2,
+                4 => -1,
+                _ => 0
+            };
+
+            points += credit.Purpose switch
+            {
+                Credit.Purposes.Appliances => 2,
+                Credit.Purposes.Repair => 1,
+                Credit.Purposes.Other => -1,
+                _ => 0
+            };
+
+            //                         really?
+            // points += credit.Term > 12 ? 1 : 1;
+            points++;
+
+            points += (credit.LoanAmount * 100 / credit.TotalIncome) switch
+            {
+                <= 80 => 4,
+                > 80 and <= 150 => 3,
+                > 150 and <= 250 => 2,
+                _ => 1
+            };
+
+            credit.Accepted = points > 11;
+
+            await connection.OpenAsync();
+            var transaction = await connection.BeginTransactionAsync();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"insert into credits(user_id, loan_amount, total_income, history, delinquencies, purpose, term, accepted)
+values (@user_id, @loan_amount, @total_income, @history, @delinquencies, @purpose, @term, @accepted) returning id;",
+                    transaction.Connection);
+                cmd.Parameters.AddWithValue("user_id", users[index].Id);
+                cmd.Parameters.AddWithValue("loan_amount", credit.LoanAmount);
+                cmd.Parameters.AddWithValue("total_income", credit.TotalIncome);
+                cmd.Parameters.AddWithValue("history", credit.History);
+                cmd.Parameters.AddWithValue("delinquencies", credit.Delinquencies);
+                cmd.Parameters.AddWithValue("purpose", credit.Purpose.ToString());
+                cmd.Parameters.AddWithValue("term", credit.Term);
+                cmd.Parameters.AddWithValue("accepted", credit.Accepted);
+
+                var rawCreditId = await cmd.ExecuteScalarAsync();
+                if (rawCreditId != null && (long) rawCreditId != 0)
+                    credit.Id = (long) rawCreditId;
+                else
+                    return "unable to add new credit";
+            }
+            catch (Exception exception)
+            {
+                await transaction.RollbackAsync();
+                await connection.CloseAsync();
+                Console.WriteLine(exception);
+                throw;
+            }
+
+            if (credit.Id == 0) return "unable to add new credit";
+
+            var repayments = new List<Repayment>();
+            var amount = credit.LoanAmount / credit.Term;
+            var currentTime = DateTime.Now;
+            for (var i = 1; i <= credit.Term; i++)
+            {
+                currentTime = currentTime.AddMonths(1);
+                var repayment = new Repayment
+                {
+                    Amount = amount,
+                    RepaymentDate = currentTime,
+                    Repaid = false,
+                };
+                repayments.Add(repayment);
+            }
+
+            try
+            {
+                foreach (var repayment in repayments)
+                {
+                    await using var cmd = new NpgsqlCommand(
+                        @"insert into repayments (credit_id, date, amount)
+values (@credit_id, @date, @amount);", transaction.Connection);
+                    cmd.Parameters.AddWithValue("credit_id", credit.Id);
+                    cmd.Parameters.AddWithValue("date", repayment.RepaymentDate);
+                    cmd.Parameters.AddWithValue("amount", repayment.Amount);
+
+                    if (await cmd.ExecuteNonQueryAsync() < 1)
+                        return "unable to add new credit";
+                }
+            }
+            catch (Exception exception)
+            {
+                await transaction.RollbackAsync();
+                await connection.CloseAsync();
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await transaction.CommitAsync();
+                await connection.CloseAsync();
+            }
+
+            var repaymentsList = new List<string>();
+            repayments.ForEach(item => repaymentsList.Add($"{item} "));
+            repaymentsList.Add("Back to main ");
+            Console.SetCursorPosition(3, 2);
+
+            var selectedIndex = 0;
+            while (true)
+            {
+                Shred();
+                selectedIndex = Ui.ComboBox(repaymentsList, selectedIndex);
+                if (selectedIndex == repaymentsList.Count - 1)
+                    break;
+            }
+
+            return string.Empty;
+        }
+
+        private static async Task<string> FillUserProfile()
+        {
+            Title("Fill user profile");
+
+            var login = Ui.InputText("Search", 20, 3, 3, 1);
+            Shred();
+
+            await using var connection = Database.GetConnection();
+            await connection.OpenAsync();
+            var users = new List<User>();
+            try
+            {
+                await using var cmd = new NpgsqlCommand(
+                    @"select u.id, u.login, u.firstname, u.lastname, u.middlename, u.passport
 from users u
          left join profiles p on u.id = p.user_id
 where p.id is null
@@ -137,10 +426,8 @@ order by u.id;", connection);
                         FirstName = reader.GetString(2),
                         LastName = reader.GetString(3),
                         MiddleName = reader.GetString(4),
-                        Passport = reader.GetString(6)
+                        Passport = reader.GetString(5)
                     };
-                    _ = TryParse(reader.GetString(3), out User.Roles role);
-                    user.Role = role;
 
                     users.Add(user);
                 }
@@ -240,6 +527,8 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
 
         private static async Task<string> RegisterNewUser()
         {
+            Title("Register new user");
+
             var roles = new List<string> {"User  ", "Admin "};
 
             var user = new User();
@@ -342,7 +631,7 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
                         user.Login = reader.GetString(1);
                         user.Password = reader.GetString(2);
 
-                        TryParse(reader.GetString(3), out User.Roles role);
+                        _ = TryParse(reader.GetString(3), out User.Roles role);
                         user.Role = role;
                     }
                 }
@@ -378,6 +667,8 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
             return response;
         }
 
+        private static void Title(string title) => Console.Title = $"IBank - {title}";
+
         private static void Shred() => Console.Clear();
     }
 
@@ -401,7 +692,7 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
             Admin = 2
         }
 
-        public int Id { get; set; }
+        public long Id { get; set; }
         public string Login { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
@@ -412,10 +703,7 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
         public DateTime CreatedAt { get; set; }
         public Profile Profile { get; set; }
 
-        public override string ToString()
-        {
-            return $"{Login} {FirstName} {LastName}";
-        }
+        public override string ToString() => $"{Login} {FirstName} {LastName} {Passport}";
     }
 
     internal record Profile
@@ -434,7 +722,7 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
             WidowWidower = 4,
         }
 
-        public int Id { get; set; }
+        public long Id { get; set; }
         public Genders Gender { get; set; }
         public MaritalStatuses MaritalStatus { get; set; }
         public int Age { get; set; }
@@ -444,7 +732,7 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
 
     internal record Credit
     {
-        public enum Terms
+        public enum Purposes
         {
             Appliances = 1,
             Repair = 2,
@@ -452,13 +740,25 @@ values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
             Other = 4
         }
 
-        public int Id { get; set; }
-        public int SumOfTotalIncome { get; set; }
-        public int TotalIncome { get; set; }
+        public long Id { get; set; }
+        public double LoanAmount { get; set; }
+        public double TotalIncome { get; set; }
         public int History { get; set; }
         public int Delinquencies { get; set; }
-        public string Purpose { get; set; }
-        public Terms Term { get; set; }
+        public Purposes Purpose { get; set; }
+        public int Term { get; set; }
         public bool Accepted { get; set; }
+        public List<Repayment> Repayments { get; set; }
+    }
+
+    internal record Repayment
+    {
+        public long Id { get; set; }
+        public DateTime RepaymentDate { get; set; }
+        public double Amount { get; set; }
+        public bool Repaid { get; set; }
+
+        public override string ToString() =>
+            $@"Date: {RepaymentDate}, Amount: {Amount}, Repaid: {(Repaid ? "✅" : "❌")}";
     }
 }

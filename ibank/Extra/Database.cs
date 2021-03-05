@@ -43,17 +43,16 @@ namespace ibank.Extra
 
             await using var tableCredits = new NpgsqlCommand(@"create table if not exists credits
 (
-    id                    bigserial primary key,
-    --user_id bigint not null references users,
-    profile_id            bigint       not null references profiles,
-    sum_from_total_income integer      not null,
-    total_income          integer      not null,
-    history               integer      not null, --closed credits
-    delinquencies         integer      not null, --delayed credits
-    purpose               varchar(20)  not null,
-    term                  varchar(100) not null,
-    accepted              boolean default false,
-    removed               boolean default false
+    id            bigserial primary key,
+    user_id       bigint         not null references users,
+    loan_amount   numeric(10, 2) not null,
+    total_income  numeric(10, 2) not null,
+    history       integer        not null, --closed credits
+    delinquencies integer        not null, --delayed credits
+    purpose       varchar(20)    not null,
+    term          integer        not null,
+    accepted      boolean default false,
+    removed       boolean default false
 );", connection);
             await tableCredits.ExecuteNonQueryAsync();
 
