@@ -5,7 +5,6 @@ namespace ibank.Extra
 {
     public static class Database
     {
-        //TODO: get database connection info from environment variables or application arguments
         private const string ConnectionString =
             "Server=localhost;Port=5432;User Id=user;Password=pass;Database=ibankdb;";
 
@@ -13,7 +12,6 @@ namespace ibank.Extra
         {
             await using var connection = GetConnection();
             await connection.OpenAsync();
-
             await using var tableUsers = new NpgsqlCommand(@"create table if not exists users
 (
     id         bigserial primary key,
@@ -67,10 +65,9 @@ namespace ibank.Extra
 );", connection);
             await tableRepayments.ExecuteNonQueryAsync();
 
-            //TODO: get first user data from environment variables or application arguments
-
             await using var checkIfModeratorExists =
-                new NpgsqlCommand("select exists(select 1 from users where login = 'moderator' and removed = false);",
+                new NpgsqlCommand(
+                    "select exists(select 1 from users where login = 'moderator' and removed = false);",
                     connection);
 
             var exists = await checkIfModeratorExists.ExecuteScalarAsync();
@@ -84,6 +81,7 @@ values ('moderator', 'Moderator', 'Moderator', @password, @role, 'A00000001') on
             insertFirstAdmin.Parameters.AddWithValue("password", passwordHash);
             insertFirstAdmin.Parameters.AddWithValue("role", User.Roles.Admin.ToString());
             await insertFirstAdmin.ExecuteNonQueryAsync();
+            await connection.CloseAsync();
         }
 
         public static NpgsqlConnection GetConnection()

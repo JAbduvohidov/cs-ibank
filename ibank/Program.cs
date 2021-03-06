@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Threading;
 using System.Threading.Tasks;
 using ibank.Extra;
 using Microsoft.VisualBasic;
@@ -27,7 +26,7 @@ namespace ibank
             var response = await User.AuthenticationAsync(login, password);
             if (response.Error != string.Empty)
             {
-                Console.WriteLine(response.Error);
+                Ui.Notification(response.Error);
                 return;
             }
 
@@ -45,7 +44,8 @@ namespace ibank
                 }
                 default:
                 {
-                    Console.WriteLine("you don't have any permissions :(");
+                    Shred();
+                    Ui.Notification("you don't have any permissions :(", Ui.NotificationType.Warning);
                     break;
                 }
             }
@@ -70,25 +70,13 @@ namespace ibank
                     case 0:
                     {
                         Shred();
-                        var infoText = await ApplicationHistoryAsync(phoneNumber);
-                        if (infoText != string.Empty)
-                        {
-                            Console.WriteLine(infoText);
-                            Thread.Sleep(1200);
-                        }
-
+                        await ApplicationHistoryAsync(phoneNumber);
                         break;
                     }
                     case 1:
                     {
                         Shred();
-                        var infoText = await RemainingLoansAsync(phoneNumber);
-                        if (infoText != string.Empty)
-                        {
-                            Console.WriteLine(infoText);
-                            Thread.Sleep(1200);
-                        }
-
+                        await RemainingLoansAsync(phoneNumber);
                         break;
                     }
                     case 2:
@@ -122,39 +110,22 @@ namespace ibank
                     case 0:
                     {
                         Shred();
-                        var infoText = await RegisterNewUserAsync();
-                        if (infoText != string.Empty)
-                        {
-                            Console.WriteLine(infoText);
-                            Thread.Sleep(1200);
-                        }
-
+                        await RegisterNewUserAsync();
+                        Console.ReadKey();
                         break;
                     }
                     case 1:
                     {
                         Shred();
-                        var infoText = await FillUserProfileAsync(phoneNumber);
-                        if (infoText != string.Empty)
-                        {
-                            Shred();
-                            Console.WriteLine(infoText);
-                            Thread.Sleep(1200);
-                        }
-
+                        await FillUserProfileAsync(phoneNumber);
+                        Console.ReadKey();
                         break;
                     }
                     case 2:
                     {
                         Shred();
-                        var infoText = await ApplyForLoanAsync(phoneNumber);
-                        if (infoText != string.Empty)
-                        {
-                            Shred();
-                            Console.WriteLine(infoText);
-                            Thread.Sleep(1200);
-                        }
-
+                        await ApplyForLoanAsync(phoneNumber);
+                        Console.ReadKey();
                         break;
                     }
                     case 3:
@@ -173,7 +144,7 @@ namespace ibank
             }
         }
 
-        private static async Task<string> RemainingLoansAsync(string phoneNumber)
+        private static async Task RemainingLoansAsync(string phoneNumber)
         {
             var credits = await Credit.GetRemainingLoanAsync(phoneNumber);
 
@@ -201,12 +172,9 @@ namespace ibank
                 Console.SetCursorPosition(2, 2);
                 Ui.ComboBox(repaymentsList);
             }
-
-
-            return string.Empty;
         }
 
-        private static async Task<string> ApplicationHistoryAsync(string phoneNumber)
+        private static async Task ApplicationHistoryAsync(string phoneNumber)
         {
             var credits = await Credit.GetCreditHistoryAsync(phoneNumber);
 
@@ -218,11 +186,9 @@ namespace ibank
             Shred();
             Console.SetCursorPosition(2, 2);
             Ui.ComboBox(creditsList);
-
-            return string.Empty;
         }
 
-        private static async Task<string> ApplyForLoanAsync(string phoneNumber)
+        private static async Task ApplyForLoanAsync(string phoneNumber)
         {
             Title("Apply for loan");
 
@@ -240,34 +206,56 @@ namespace ibank
             Console.SetCursorPosition(2, 2);
             var index = Ui.ComboBox(usersString);
             if (index == usersString.Count - 1)
-                return string.Empty;
+                return;
 
             var credit = new Credit();
 
             Shred();
 
-            if (!double.TryParse(Ui.InputText("Total income:", 20, 3, 3, 1), out var totalIncome))
-                return "invalid income value";
+            if (!double.TryParse(Ui.InputText("Total income:", 20, 3, 3, 1), out var totalIncome) && totalIncome < 10)
+            {
+                Shred();
+                Ui.Notification("invalid income value");
+                return;
+            }
 
             Shred();
 
-            if (!int.TryParse(Ui.InputText("Number of closed credits:", 20, 3, 3, 1), out var numberOfClosedCredits))
-                return "invalid value for number of closed credits";
+            if (!int.TryParse(Ui.InputText("Number of closed credits:", 20, 3, 3, 1), out var numberOfClosedCredits) &&
+                numberOfClosedCredits < 0)
+            {
+                Shred();
+                Ui.Notification("invalid value for number of closed credits");
+                return;
+            }
 
             Shred();
 
-            if (!int.TryParse(Ui.InputText("Number of delayed credits:", 20, 3, 3, 1), out var numberOfDelayedCredits))
-                return "invalid value for number of delayed credits";
+            if (!int.TryParse(Ui.InputText("Number of delayed credits:", 20, 3, 3, 1),
+                out var numberOfDelayedCredits) && numberOfDelayedCredits < 0)
+            {
+                Shred();
+                Ui.Notification("invalid value for number of delayed credits");
+                return;
+            }
 
             Shred();
 
-            if (!int.TryParse(Ui.InputText("Loan terms:", 20, 3, 3, 1), out var loanTerms))
-                return "invalid value for number of delayed credits";
+            if (!int.TryParse(Ui.InputText("Loan terms:", 20, 3, 3, 1), out var loanTerms) && loanTerms < 1)
+            {
+                Shred();
+                Ui.Notification("invalid value for loan terms");
+                return;
+            }
 
             Shred();
 
-            if (!int.TryParse(Ui.InputText("Loan amount:", 20, 3, 3, 1), out var loanAmount))
-                return "invalid value for number of delayed credits";
+            if (!int.TryParse(Ui.InputText("Loan amount:", 20, 3, 3, 1), out var loanAmount) && loanAmount < 1)
+            {
+                Shred();
+                Ui.Notification("invalid value for loan amount");
+                return;
+            }
 
             Shred();
 
@@ -296,10 +284,19 @@ namespace ibank
 
             credit.Id = await Credit.InsertCreditAsync(users[index].Id, credit);
 
-            if (credit.Id == 0) return "unable to add new credit";
+            if (credit.Id == 0)
+            {
+                Shred();
+                Ui.Notification("unable to add new credit");
+                return;
+            }
 
             if (!credit.Accepted)
-                return "We are sorry but your application was not accepted";
+            {
+                Shred();
+                Ui.Notification("We are sorry but your application was not accepted", Ui.NotificationType.Warning);
+                return;
+            }
 
             var repayments = new List<Repayment>();
             var amount = credit.LoanAmount / credit.Term;
@@ -318,7 +315,11 @@ namespace ibank
 
 
             if (await Repayment.InsertRepaymentAsync(credit.Id, repayments) < 1)
-                return "unable to add repayments";
+            {
+                Shred();
+                Ui.Notification("unable to add repayments");
+                return;
+            }
 
             var repaymentsList = new List<string>();
             repayments.ForEach(item => repaymentsList.Add($"{item} "));
@@ -334,7 +335,8 @@ namespace ibank
                     break;
             }
 
-            return string.Empty;
+            Shred();
+            Ui.Notification("Application accepted", Ui.NotificationType.Success);
         }
 
         private static int CalculatePoints(IReadOnlyList<User> users, int index, Credit credit)
@@ -402,7 +404,7 @@ namespace ibank
             return points;
         }
 
-        private static async Task<string> FillUserProfileAsync(string phoneNumber)
+        private static async Task FillUserProfileAsync(string phoneNumber)
         {
             Title("Fill user profile");
 
@@ -418,7 +420,7 @@ namespace ibank
             Console.SetCursorPosition(2, 2);
             var index = Ui.ComboBox(usersString);
             if (index == usersString.Count - 1)
-                return string.Empty;
+                return;
 
             var genders = new List<string> {"Male   ", "Female "};
 
@@ -432,8 +434,12 @@ namespace ibank
 
             Shred();
             _ = int.TryParse(Ui.InputText("Age:", 20, 3, 3, 1), out var age);
-            if (age < 18)
-                return "invalid value for field age";
+            if (age < 18 || age > 200)
+            {
+                Shred();
+                Ui.Notification("invalid value for field age");
+                return;
+            }
 
             profile.Age = age;
 
@@ -457,17 +463,27 @@ namespace ibank
                 Shred();
                 profile.Nationality = Ui.InputText("Nationality:", 30, 3, 3, 2);
                 if (profile.Nationality.Length < 2)
-                    return "nationality is too short";
+                {
+                    Shred();
+                    Ui.Notification("nationality is too short");
+                    return;
+                }
             }
             else
                 profile.Nationality = Strings.Trim(nationalities[nationalitiesIndex]);
 
-            return await Profile.InsertProfileAsync(users[index].Id, profile) < 1
-                ? "unable to create new profile"
-                : string.Empty;
+            if (await Profile.InsertProfileAsync(users[index].Id, profile) < 1)
+            {
+                Shred();
+                Ui.Notification("unable to create new profile");
+                return;
+            }
+
+            Shred();
+            Ui.Notification("Done", Ui.NotificationType.Success);
         }
 
-        private static async Task<string> RegisterNewUserAsync()
+        private static async Task RegisterNewUserAsync()
         {
             Title("Register new user");
 
@@ -478,19 +494,31 @@ namespace ibank
             Shred();
 
             if (user.Login.Length < 10 && !int.TryParse(user.Login, out _))
-                return "invalid phone number";
+            {
+                Shred();
+                Ui.Notification("invalid phone number");
+                return;
+            }
 
             user.FirstName = Ui.InputText("*Name", 20, 3, 3, 1);
             Shred();
 
             if (user.FirstName.Length < 1)
-                return "invalid first name";
+            {
+                Shred();
+                Ui.Notification("invalid first name");
+                return;
+            }
 
             user.LastName = Ui.InputText("*Surname", 20, 3, 3, 1);
             Shred();
 
             if (user.LastName.Length < 1)
-                return "invalid last name";
+            {
+                Shred();
+                Ui.Notification("invalid last name");
+                return;
+            }
 
             user.MiddleName = Ui.InputText("MiddleName", 20, 3, 3, 1);
             Shred();
@@ -504,17 +532,33 @@ namespace ibank
             Shred();
 
             if (user.Passport.Length < 8)
-                return "invalid passport data";
+            {
+                Shred();
+                Ui.Notification("invalid passport data");
+                return;
+            }
 
             user.Password = Ui.InputText("*Create password", 30, 3, 3, 1, "*");
             Shred();
 
             if (user.Password.Length < 8)
-                return "password is too short";
+            {
+                Shred();
+                Ui.Notification("password is too short");
+                return;
+            }
 
             user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
 
-            return await User.AddNewUserAsync(user) < 1 ? "unable to register new user" : string.Empty;
+            if (await User.AddNewUserAsync(user) < 1)
+            {
+                Shred();
+                Ui.Notification("unable to register new user");
+                return;
+            }
+
+            Shred();
+            Ui.Notification("Success", Ui.NotificationType.Success);
         }
 
         private static void Title(string title) => Console.Title = $"IBank - {title}";

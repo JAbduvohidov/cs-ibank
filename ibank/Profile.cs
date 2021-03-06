@@ -34,30 +34,28 @@ namespace ibank
         public static async Task<int> InsertProfileAsync(long userId, Profile profile)
         {
             await using var connection = Database.GetConnection();
-            using (connection.OpenAsync())
+            await connection.OpenAsync();
+            try
             {
-                try
-                {
-                    await using var cmd = new NpgsqlCommand(
-                        @"insert into profiles(user_id, gender, marital_status, age, nationality)
+                await using var cmd = new NpgsqlCommand(
+                    @"insert into profiles(user_id, gender, marital_status, age, nationality)
 values (@user_id, @gender, @marital_status, @age, @nationality);", connection);
-                    cmd.Parameters.AddWithValue("user_id", NpgsqlDbType.Bigint, userId);
-                    cmd.Parameters.AddWithValue("gender", profile.Gender.ToString());
-                    cmd.Parameters.AddWithValue("marital_status", profile.MaritalStatus.ToString());
-                    cmd.Parameters.AddWithValue("age", NpgsqlDbType.Integer, profile.Age);
-                    cmd.Parameters.AddWithValue("nationality", profile.Nationality);
+                cmd.Parameters.AddWithValue("user_id", NpgsqlDbType.Bigint, userId);
+                cmd.Parameters.AddWithValue("gender", profile.Gender.ToString());
+                cmd.Parameters.AddWithValue("marital_status", profile.MaritalStatus.ToString());
+                cmd.Parameters.AddWithValue("age", NpgsqlDbType.Integer, profile.Age);
+                cmd.Parameters.AddWithValue("nationality", profile.Nationality);
 
-                    return await cmd.ExecuteNonQueryAsync();
-                }
-                catch (Exception exception)
-                {
-                    Console.WriteLine(exception);
-                    throw;
-                }
-                finally
-                {
-                    await connection.CloseAsync();
-                }
+                return await cmd.ExecuteNonQueryAsync();
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
             }
         }
     }

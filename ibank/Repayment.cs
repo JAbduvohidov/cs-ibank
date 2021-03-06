@@ -19,6 +19,7 @@ namespace ibank
         public static async Task<int> InsertRepaymentAsync(long creditId, IEnumerable<Repayment> repayments)
         {
             await using var connection = Database.GetConnection();
+            await connection.OpenAsync();
             var transaction = await connection.BeginTransactionAsync();
             try
             {

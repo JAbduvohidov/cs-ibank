@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.VisualBasic;
 
 namespace ibank.Extra
 {
@@ -116,6 +117,50 @@ namespace ibank.Extra
                         Console.Write("\b \b");
                         break;
                     }
+                }
+            }
+        }
+
+        public enum NotificationType
+        {
+            Success = 1,
+            Warning = 2,
+            Error = 3,
+        }
+
+        public static void Notification(string message, NotificationType type = NotificationType.Error)
+        {
+            Console.SetCursorPosition(2, 2);
+            switch (type)
+            {
+                case NotificationType.Success:
+                {
+                    Console.BackgroundColor = ConsoleColor.White;
+                    Console.ForegroundColor = ConsoleColor.DarkGreen;
+                    Console.WriteLine($" ✅ {message} ");
+                    Console.ResetColor();
+                    break;
+                }
+                case NotificationType.Warning:
+                {
+                    Console.BackgroundColor = ConsoleColor.DarkYellow;
+                    Console.ForegroundColor = ConsoleColor.Black;
+                    Console.WriteLine($" ⚠ {message} ");
+                    Console.ResetColor();
+                    break;
+                }
+                case NotificationType.Error:
+                {
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.BackgroundColor = ConsoleColor.White;
+                    Console.WriteLine($" ❌ {message} ");
+                    Console.ResetColor();
+                    break;
+                }
+                default:
+                {
+                    Console.WriteLine($" {message} ");
+                    break;
                 }
             }
         }

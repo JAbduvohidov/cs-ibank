@@ -70,41 +70,39 @@ values (@user_id, @loan_amount, @total_income, @history, @delinquencies, @purpos
         {
             var credits = new List<Credit>();
             await using var connection = Database.GetConnection();
-            using (connection.OpenAsync())
+            await connection.OpenAsync();
+            try
             {
-                try
-                {
-                    await using var cmd = new NpgsqlCommand(
-                        @"select loan_amount, purpose, term, accepted
+                await using var cmd = new NpgsqlCommand(
+                    @"select loan_amount, purpose, term, accepted
 from credits
          left join users u on credits.user_id = u.id
 where u.login = @login;", connection);
-                    cmd.Parameters.AddWithValue("login", phoneNumber);
+                cmd.Parameters.AddWithValue("login", phoneNumber);
 
-                    var reader = await cmd.ExecuteReaderAsync();
-                    while (await reader.ReadAsync())
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var credit = new Credit
                     {
-                        var credit = new Credit
-                        {
-                            LoanAmount = reader.GetDouble(0),
-                            Term = reader.GetInt32(2),
-                            Accepted = reader.GetBoolean(3),
-                        };
-                        _ = Enum.TryParse(reader.GetString(1), out Purposes purpose);
-                        credit.Purpose = purpose;
+                        LoanAmount = reader.GetDouble(0),
+                        Term = reader.GetInt32(2),
+                        Accepted = reader.GetBoolean(3),
+                    };
+                    _ = Enum.TryParse(reader.GetString(1), out Purposes purpose);
+                    credit.Purpose = purpose;
 
-                        credits.Add(credit);
-                    }
+                    credits.Add(credit);
                 }
-                catch (Exception exception)
-                {
-                    Console.WriteLine(exception);
-                    throw;
-                }
-                finally
-                {
-                    await connection.CloseAsync();
-                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
             }
 
             return credits;
@@ -114,45 +112,43 @@ where u.login = @login;", connection);
         {
             var credits = new List<Credit>();
             await using var connection = Database.GetConnection();
-            using (connection.OpenAsync())
+            await connection.OpenAsync();
+            try
             {
-                try
-                {
-                    await using var cmd = new NpgsqlCommand(
-                        @"select c.id, c.purpose, c.term, c.accepted, coalesce(sum(r.amount), 0)
+                await using var cmd = new NpgsqlCommand(
+                    @"select c.id, c.purpose, c.term, c.accepted, coalesce(sum(r.amount), 0)
 from credits c
          left join users u on c.user_id = u.id
          left join repayments r on c.id = r.credit_id
 where c.removed = false and c.accepted = true
   and u.login = @login
 group by c.id;", connection);
-                    cmd.Parameters.AddWithValue("login", phoneNumber);
+                cmd.Parameters.AddWithValue("login", phoneNumber);
 
-                    var reader = await cmd.ExecuteReaderAsync();
-                    while (await reader.ReadAsync())
+                var reader = await cmd.ExecuteReaderAsync();
+                while (await reader.ReadAsync())
+                {
+                    var credit = new Credit
                     {
-                        var credit = new Credit
-                        {
-                            Id = reader.GetInt32(0),
-                            Term = reader.GetInt32(2),
-                            Accepted = reader.GetBoolean(3),
-                            LoanAmount = reader.GetDouble(4)
-                        };
-                        _ = Enum.TryParse(reader.GetString(1), out Purposes purpose);
-                        credit.Purpose = purpose;
+                        Id = reader.GetInt32(0),
+                        Term = reader.GetInt32(2),
+                        Accepted = reader.GetBoolean(3),
+                        LoanAmount = reader.GetDouble(4)
+                    };
+                    _ = Enum.TryParse(reader.GetString(1), out Purposes purpose);
+                    credit.Purpose = purpose;
 
-                        credits.Add(credit);
-                    }
+                    credits.Add(credit);
                 }
-                catch (Exception exception)
-                {
-                    Console.WriteLine(exception);
-                    throw;
-                }
-                finally
-                {
-                    await connection.CloseAsync();
-                }
+            }
+            catch (Exception exception)
+            {
+                Console.WriteLine(exception);
+                throw;
+            }
+            finally
+            {
+                await connection.CloseAsync();
             }
 
             return credits;
