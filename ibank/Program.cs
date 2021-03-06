@@ -191,6 +191,7 @@ namespace ibank
         private static async Task ApplyForLoanAsync(string phoneNumber)
         {
             Title("Apply for loan");
+            const double loanPercent = 0.03;
 
             var login = Ui.InputText("Search", 20, 3, 3, 1);
             Shred();
@@ -268,7 +269,7 @@ namespace ibank
             };
 
             Console.SetCursorPosition(4, 1);
-            Console.Write("Marital status:");
+            Console.Write("Loan purpose:");
             Console.SetCursorPosition(3, 2);
             credit.Purpose = (Credit.Purposes) (Ui.ComboBox(purposes) + 1);
             credit.TotalIncome = totalIncome;
@@ -281,6 +282,7 @@ namespace ibank
 
             credit.Accepted = points > 11;
 
+            credit.LoanAmount += credit.LoanAmount * loanPercent;
 
             credit.Id = await Credit.InsertCreditAsync(users[index].Id, credit);
 

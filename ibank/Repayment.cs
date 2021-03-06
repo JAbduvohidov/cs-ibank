@@ -19,36 +19,33 @@ namespace ibank
         public static async Task<int> InsertRepaymentAsync(long creditId, IEnumerable<Repayment> repayments)
         {
             await using var connection = Database.GetConnection();
+            var inserted = 0;
             await connection.OpenAsync();
-            var transaction = await connection.BeginTransactionAsync();
             try
             {
                 foreach (var repayment in repayments)
                 {
                     await using var cmd = new NpgsqlCommand(
                         @"insert into repayments (credit_id, date, amount)
-values (@credit_id, @date, @amount);", transaction.Connection);
+values (@credit_id, @date, @amount);", connection);
                     cmd.Parameters.AddWithValue("credit_id", creditId);
                     cmd.Parameters.AddWithValue("date", repayment.RepaymentDate);
                     cmd.Parameters.AddWithValue("amount", repayment.Amount);
 
-                    return await cmd.ExecuteNonQueryAsync();
+                    inserted += await cmd.ExecuteNonQueryAsync();
                 }
             }
             catch (Exception exception)
             {
-                await transaction.RollbackAsync();
-                await connection.CloseAsync();
                 Console.WriteLine(exception);
                 throw;
             }
             finally
             {
-                await transaction.CommitAsync();
                 await connection.CloseAsync();
             }
 
-            return 0;
+            return inserted;
         }
 
         public static async Task<List<Repayment>> GetCreditRepaymentsAsync(long creditId)
